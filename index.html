@@ -1,60 +1,641 @@
-<!DOCTYPE html>
-<html lang="id">
-<head>
-  <meta charset="UTF-8">
-  <title>Tic Tac Toe</title>
+// ===== UPDATE SYSTEM (RAW GITHUB) =====
+const APP_VERSION = "1.3";
+const RAW_GITHUB_URL = "https://raw.githubusercontent.com/Aditya443098/Yaa/refs/heads/main/index.html";
+const UPDATE_CHECK_INTERVAL = 3600000; // 1 jam
 
-  <!-- Anti cache dasar -->
-  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
-  <meta http-equiv="Pragma" content="no-cache">
-  <meta http-equiv="Expires" content="0">
+// ===== LOADING & UPDATE SYSTEM =====
+function initializeUpdateSystem() {
+    console.log(`🚀 Initializing Tic Tac Toe v${APP_VERSION}`);
+    
+    // Tampilkan loading screen
+    document.getElementById('loadingScreen').style.display = 'flex';
+    
+    // Cek versi dan update jika diperlukan
+    checkVersionAndUpdate();
+    
+    // Setup periodic update check
+    setInterval(checkVersionAndUpdate, UPDATE_CHECK_INTERVAL);
+}
 
-  <style>
-    body {
-      margin: 0;
-      background: #0f172a;
-      color: #fff;
-      font-family: Arial, sans-serif;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      height: 100vh;
+function checkVersionAndUpdate() {
+    console.log('🔍 Checking for updates from GitHub...');
+    
+    // Tambahkan timestamp untuk bypass cache
+    const timestamp = Date.now();
+    const url = `${RAW_GITHUB_URL}?t=${timestamp}`;
+    
+    fetch(url)
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response.text();
+        })
+        .then(htmlContent => {
+            const remoteVersion = extractVersionFromHTML(htmlContent);
+            const currentVersion = APP_VERSION;
+            
+            console.log(`📊 Local: v${currentVersion}, Remote: v${remoteVersion}`);
+            
+            if (remoteVersion && remoteVersion !== currentVersion) {
+                console.log(`🔄 Update available! Remote: ${remoteVersion}, Local: ${currentVersion}`);
+                showUpdateNotification(remoteVersion);
+            } else {
+                console.log('✅ App is up to date');
+                // Lanjutkan loading aplikasi
+                setTimeout(initializeApp, 1000);
+            }
+        })
+        .catch(error => {
+            console.error('❌ Failed to check updates:', error);
+            // Tetap lanjut dengan aplikasi lokal jika gagal cek update
+            setTimeout(initializeApp, 1000);
+            showNotification('Tidak dapat memeriksa update, menggunakan versi lokal', 'warning');
+        });
+}
+
+function extractVersionFromHTML(html) {
+    try {
+        // Cari pattern const APP_VERSION = "x.x"
+        const versionMatch = html.match(/const APP_VERSION\s*=\s*["'](\d+\.\d+)["']/);
+        if (versionMatch && versionMatch[1]) {
+            return versionMatch[1];
+        }
+        
+        // Alternatif pattern jika format berbeda
+        const versionMatch2 = html.match(/APP_VERSION\s*:\s*["'](\d+\.\d+)["']/);
+        if (versionMatch2 && versionMatch2[1]) {
+            return versionMatch2[1];
+        }
+        
+        console.warn('⚠️ Could not extract version from HTML');
+        return null;
+    } catch (error) {
+        console.error('Error extracting version:', error);
+        return null;
     }
-    .loader {
-      text-align: center;
-      animation: pulse 1.5s infinite;
-    }
-    @keyframes pulse {
-      0% { transform: scale(1); opacity: .6; }
-      50% { transform: scale(1.05); opacity: 1; }
-      100% { transform: scale(1); opacity: .6; }
-    }
-  </style>
-</head>
-<body>
+}
 
-<div class="loader">
-  <h2>Loading Game...</h2>
-  <p>Mengambil update terbaru</p>
-</div>
-
-<script>
-  // RAW LINK (SUMBER UTAMA)
-  const RAW_URL = "https://raw.githubusercontent.com/Aditya443098/Yaa/refs/heads/main/index.html";
-
-  // paksa ambil versi terbaru (anti cache)
-  fetch(RAW_URL + "?t=" + Date.now())
-    .then(res => res.text())
-    .then(html => {
-      document.open();
-      document.write(html);
-      document.close();
-    })
-    .catch(err => {
-      document.body.innerHTML = "<h3>Gagal memuat update</h3>";
-      console.error(err);
+function showUpdateNotification(remoteVersion) {
+    const notification = document.createElement('div');
+    notification.className = 'update-notification';
+    notification.innerHTML = `
+        <div class="update-content">
+            <h3>🔄 Update Tersedia!</h3>
+            <p>Versi ${remoteVersion} tersedia. Versi saat ini: ${APP_VERSION}</p>
+            <div class="update-actions">
+                <button id="updateNow" class="btn btn-primary">Update Sekarang</button>
+                <button id="updateLater" class="btn btn-secondary">Nanti</button>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(notification);
+    
+    // Styling untuk notification
+    const style = document.createElement('style');
+    style.textContent = `
+        .update-notification {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.8);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 10000;
+            animation: fadeIn 0.3s;
+        }
+        
+        .update-content {
+            background: var(--surface);
+            padding: 30px;
+            border-radius: var(--border-radius);
+            max-width: 400px;
+            width: 90%;
+            box-shadow: var(--shadow), 0 0 50px rgba(59, 130, 246, 0.3);
+            text-align: center;
+        }
+        
+        .update-actions {
+            display: flex;
+            gap: 15px;
+            margin-top: 20px;
+            justify-content: center;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+    `;
+    document.head.appendChild(style);
+    
+    // Event listeners untuk tombol
+    document.getElementById('updateNow').addEventListener('click', () => {
+        performUpdate();
     });
-</script>
+    
+    document.getElementById('updateLater').addEventListener('click', () => {
+        notification.remove();
+        style.remove();
+        setTimeout(initializeApp, 500);
+    });
+    
+    // Auto close setelah 30 detik
+    setTimeout(() => {
+        if (document.contains(notification)) {
+            notification.remove();
+            style.remove();
+            setTimeout(initializeApp, 500);
+        }
+    }, 30000);
+}
 
-</body>
-  </html>
+function performUpdate() {
+    console.log('🔄 Performing update...');
+    
+    // Tampilkan loading
+    document.getElementById('loadingScreen').innerHTML = `
+        <div class="loader"></div>
+        <h2>Mengunduh Update...</h2>
+        <p>Jangan tutup atau refresh halaman</p>
+    `;
+    
+    // Fetch versi terbaru
+    const timestamp = Date.now();
+    fetch(`${RAW_GITHUB_URL}?t=${timestamp}`)
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response.text();
+        })
+        .then(htmlContent => {
+            console.log('✅ Update downloaded successfully');
+            
+            // Simpan data user penting sebelum update
+            const userData = saveCriticalUserData();
+            
+            // Replace seluruh halaman dengan konten baru
+            document.open();
+            document.write(htmlContent);
+            document.close();
+            
+            // Restore data user setelah update
+            setTimeout(() => {
+                restoreCriticalUserData(userData);
+                localStorage.setItem('lastUpdateCheck', Date.now().toString());
+                showNotification('✅ Aplikasi berhasil diupdate!', 'success');
+            }, 1000);
+        })
+        .catch(error => {
+            console.error('❌ Update failed:', error);
+            document.getElementById('loadingScreen').innerHTML = `
+                <div style="color: var(--danger)">❌</div>
+                <h2>Update Gagal</h2>
+                <p>${error.message}</p>
+                <button onclick="location.reload()" class="btn btn-primary mt-20">Coba Lagi</button>
+            `;
+        });
+}
+
+function saveCriticalUserData() {
+    // Simpan data penting yang tidak boleh hilang saat update
+    const criticalData = {
+        // Data autentikasi
+        accounts: localStorage.getItem('ticTacToeAccounts'),
+        currentUser: localStorage.getItem('ticTacToeUser'),
+        
+        // Data game yang penting
+        coins: localStorage.getItem('ticTacToeUser') ? 
+            JSON.parse(localStorage.getItem('ticTacToeUser')).coins : null,
+        
+        // Settings
+        settings: localStorage.getItem('ticTacToeUser') ? 
+            JSON.parse(localStorage.getItem('ticTacToeUser')).settings : null,
+        
+        // Purchased items
+        purchasedItems: localStorage.getItem('ticTacToeUser') ? 
+            JSON.parse(localStorage.getItem('ticTacToeUser')).purchasedItems : null,
+            
+        // Tournament progress
+        tournament: localStorage.getItem('ticTacToeTournament'),
+        
+        // Version info
+        lastVersion: APP_VERSION,
+        lastUpdate: Date.now()
+    };
+    
+    // Simpan ke sessionStorage sebagai backup
+    sessionStorage.setItem('criticalDataBackup', JSON.stringify(criticalData));
+    
+    return criticalData;
+}
+
+function restoreCriticalUserData(criticalData) {
+    try {
+        // Restore data dari backup
+        if (criticalData.accounts) {
+            localStorage.setItem('ticTacToeAccounts', criticalData.accounts);
+        }
+        
+        if (criticalData.currentUser) {
+            localStorage.setItem('ticTacToeUser', criticalData.currentUser);
+        }
+        
+        if (criticalData.tournament) {
+            localStorage.setItem('ticTacToeTournament', criticalData.tournament);
+        }
+        
+        // Update timestamp terakhir
+        localStorage.setItem('lastUpdateCheck', Date.now().toString());
+        
+        console.log('✅ User data restored successfully');
+        return true;
+    } catch (error) {
+        console.error('❌ Failed to restore user data:', error);
+        return false;
+    }
+}
+
+// ===== VERSION MIGRATION =====
+function checkVersionMigration() {
+    const lastVersion = localStorage.getItem('lastAppVersion');
+    
+    if (!lastVersion) {
+        // First time launch
+        localStorage.setItem('lastAppVersion', APP_VERSION);
+        return;
+    }
+    
+    if (lastVersion !== APP_VERSION) {
+        console.log(`🔄 Migrating from v${lastVersion} to v${APP_VERSION}`);
+        
+        // Reset game state only, keep user data
+        resetGameState();
+        
+        // Update stored version
+        localStorage.setItem('lastAppVersion', APP_VERSION);
+        
+        // Show migration notification
+        showNotification(`Aplikasi diperbarui ke versi ${APP_VERSION}`, 'success');
+    }
+}
+
+function resetGameState() {
+    // Reset hanya game state, bukan data user
+    const gameState = {
+        currentPlayer: 'X',
+        gameBoard: [],
+        gameActive: false,
+        boardSize: 3,
+        vsBot: true,
+        botDifficulty: 'normal',
+        scores: { X: 0, O: 0 },
+        winningLine: [],
+        botThinking: false,
+        version: APP_VERSION
+    };
+    
+    localStorage.setItem('ticTacToeGame', JSON.stringify(gameState));
+    
+    // Reset tournament state if exists
+    if (localStorage.getItem('ticTacToeTournament')) {
+        const tournament = JSON.parse(localStorage.getItem('ticTacToeTournament'));
+        tournament.round = 0;
+        tournament.completed = false;
+        localStorage.setItem('ticTacToeTournament', JSON.stringify(tournament));
+    }
+    
+    console.log('✅ Game state reset for new version');
+}
+
+// ===== ANTI-CACHE SYSTEM =====
+function setupAntiCacheSystem() {
+    // Force reload jika ada parameter cache bust
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.has('forceReload')) {
+        console.log('🔄 Force reload requested');
+        localStorage.setItem('forceReload', 'true');
+        urlParams.delete('forceReload');
+        window.history.replaceState({}, '', `${window.location.pathname}?${urlParams}`);
+    }
+    
+    // Cek jika perlu force reload
+    if (localStorage.getItem('forceReload') === 'true') {
+        localStorage.removeItem('forceReload');
+        console.log('🔄 Performing forced reload');
+        setTimeout(() => {
+            window.location.reload();
+        }, 1000);
+    }
+    
+    // Set cache headers secara programatik
+    if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.getRegistrations().then(function(registrations) {
+            for(let registration of registrations) {
+                registration.unregister();
+            }
+        });
+    }
+}
+
+// ===== MAIN INITIALIZATION =====
+function initializeApp() {
+    console.log('🚀 Initializing Tic Tac Toe application...');
+    
+    // Setup anti-cache
+    setupAntiCacheSystem();
+    
+    // Check version migration
+    checkVersionMigration();
+    
+    // Load user state
+    loadUserState();
+    
+    // Setup UI
+    setupUI();
+    
+    // Setup event listeners
+    setupEventListeners();
+    
+    // Check login status
+    checkLoginStatus();
+    
+    // Hide loading screen dengan animasi
+    setTimeout(() => {
+        const loadingScreen = document.getElementById('loadingScreen');
+        loadingScreen.style.opacity = '0';
+        loadingScreen.style.transition = 'opacity 0.5s';
+        
+        setTimeout(() => {
+            loadingScreen.style.display = 'none';
+            console.log('✅ App initialized successfully');
+        }, 500);
+    }, 1000);
+}
+
+// ===== UPDATE FEATURE: CHANGE PASSWORD =====
+function setupChangePasswordFeature() {
+    // Tambahkan form ubah password ke settings
+    const settingsGroup = document.querySelector('#settingsContainer .settings-group:nth-child(3)');
+    
+    const passwordSection = document.createElement('div');
+    passwordSection.className = 'settings-group';
+    passwordSection.innerHTML = `
+        <h2>Ubah Password</h2>
+        <div class="form-group">
+            <label for="currentPassword">Password Saat Ini</label>
+            <input type="password" id="currentPassword" placeholder="Masukkan password saat ini">
+        </div>
+        <div class="form-group">
+            <label for="newPassword">Password Baru</label>
+            <input type="password" id="newPassword" placeholder="Password baru (min. 4 karakter)">
+        </div>
+        <div class="form-group">
+            <label for="confirmNewPassword">Konfirmasi Password Baru</label>
+            <input type="password" id="confirmNewPassword" placeholder="Ulangi password baru">
+        </div>
+        <button id="changePasswordBtn" class="btn btn-primary">Ubah Password</button>
+    `;
+    
+    settingsGroup.parentNode.insertBefore(passwordSection, settingsGroup.nextSibling);
+    
+    // Tambahkan event listener untuk ubah password
+    document.getElementById('changePasswordBtn').addEventListener('click', handleChangePassword);
+}
+
+function handleChangePassword() {
+    const currentPassword = document.getElementById('currentPassword').value.trim();
+    const newPassword = document.getElementById('newPassword').value.trim();
+    const confirmNewPassword = document.getElementById('confirmNewPassword').value.trim();
+    
+    // Validasi
+    if (!currentPassword || !newPassword || !confirmNewPassword) {
+        showNotification('Semua field harus diisi!', 'error');
+        return;
+    }
+    
+    if (newPassword.length < 4) {
+        showNotification('Password baru minimal 4 karakter!', 'error');
+        return;
+    }
+    
+    if (newPassword !== confirmNewPassword) {
+        showNotification('Password baru tidak cocok!', 'error');
+        return;
+    }
+    
+    // Validasi password saat ini
+    if (!userState.loggedIn) {
+        showNotification('Anda harus login terlebih dahulu!', 'error');
+        return;
+    }
+    
+    const accounts = JSON.parse(localStorage.getItem('ticTacToeAccounts') || '{}');
+    const currentAccount = accounts[userState.username];
+    
+    if (!currentAccount || currentAccount.password !== currentPassword) {
+        showNotification('Password saat ini salah!', 'error');
+        return;
+    }
+    
+    // Update password
+    currentAccount.password = newPassword;
+    accounts[userState.username] = currentAccount;
+    localStorage.setItem('ticTacToeAccounts', JSON.stringify(accounts));
+    
+    // Update user state
+    userState = {
+        ...userState,
+        ...currentAccount
+    };
+    saveUserState();
+    
+    // Reset form
+    document.getElementById('currentPassword').value = '';
+    document.getElementById('newPassword').value = '';
+    document.getElementById('confirmNewPassword').value = '';
+    
+    showNotification('Password berhasil diubah!', 'success');
+}
+
+// ===== ENHANCED ERROR HANDLING =====
+function setupErrorHandling() {
+    // Global error handler
+    window.addEventListener('error', function(e) {
+        console.error('Global error caught:', e.error);
+        showNotification(`Terjadi error: ${e.message}`, 'error');
+    });
+    
+    // Unhandled promise rejection
+    window.addEventListener('unhandledrejection', function(e) {
+        console.error('Unhandled promise rejection:', e.reason);
+        showNotification('Terjadi error dalam aplikasi', 'error');
+    });
+    
+    // Offline/online detection
+    window.addEventListener('offline', function() {
+        showNotification('Anda sedang offline', 'warning');
+    });
+    
+    window.addEventListener('online', function() {
+        showNotification('Koneksi internet kembali', 'success');
+        // Cek update jika kembali online
+        checkVersionAndUpdate();
+    });
+}
+
+// ===== PERFORMANCE OPTIMIZATION =====
+function setupPerformanceOptimization() {
+    // Debounce untuk event yang sering terjadi
+    function debounce(func, wait) {
+        let timeout;
+        return function executedFunction(...args) {
+            const later = () => {
+                clearTimeout(timeout);
+                func(...args);
+            };
+            clearTimeout(timeout);
+            timeout = setTimeout(later, wait);
+        };
+    }
+    
+    // Throttle untuk event scroll/resize
+    function throttle(func, limit) {
+        let inThrottle;
+        return function(...args) {
+            if (!inThrottle) {
+                func.apply(this, args);
+                inThrottle = true;
+                setTimeout(() => inThrottle = false, limit);
+            }
+        };
+    }
+    
+    // Optimize window resize
+    window.addEventListener('resize', throttle(function() {
+        console.log('Window resized, optimizing layout...');
+        // Update responsive layout jika diperlukan
+    }, 200));
+    
+    // Memory management
+    window.addEventListener('beforeunload', function() {
+        // Cleanup event listeners
+        document.querySelectorAll('.cell').forEach(cell => {
+            cell.replaceWith(cell.cloneNode(true));
+        });
+    });
+}
+
+// ===== ENHANCED FEATURES =====
+function setupEnhancedFeatures() {
+    // Quick game restart dengan shortcut (R key)
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'r' || e.key === 'R') {
+            if (document.getElementById('gameContainer') && 
+                !document.getElementById('gameContainer').classList.contains('hidden')) {
+                initializeGame();
+                showNotification('Game di-restart', 'info');
+            }
+        }
+        
+        // Escape untuk kembali ke menu
+        if (e.key === 'Escape') {
+            if (!document.getElementById('menuContainer').classList.contains('hidden')) {
+                return;
+            }
+            showScreen('menuContainer');
+        }
+    });
+    
+    // Touch gesture support untuk mobile
+    let touchStartX = 0;
+    let touchStartY = 0;
+    
+    document.addEventListener('touchstart', function(e) {
+        touchStartX = e.changedTouches[0].screenX;
+        touchStartY = e.changedTouches[0].screenY;
+    });
+    
+    document.addEventListener('touchend', function(e) {
+        const touchEndX = e.changedTouches[0].screenX;
+        const touchEndY = e.changedTouches[0].screenY;
+        
+        const diffX = touchStartX - touchEndX;
+        const diffY = touchStartY - touchEndY;
+        
+        // Swipe kiri untuk kembali (hanya di mobile)
+        if (Math.abs(diffX) > Math.abs(diffY) && diffX > 50) {
+            const currentScreen = document.querySelector('.container:not(.hidden)');
+            if (currentScreen && currentScreen.id !== 'menuContainer' && 
+                currentScreen.id !== 'authContainer') {
+                showScreen('menuContainer');
+            }
+        }
+    });
+}
+
+// ===== UPDATE NOTIFICATION SYSTEM =====
+function showUpdateNotificationManual() {
+    // Manual check for updates button
+    const updateCheckBtn = document.createElement('button');
+    updateCheckBtn.className = 'btn btn-secondary btn-small';
+    updateCheckBtn.innerHTML = '🔄 Cek Update';
+    updateCheckBtn.style.marginLeft = '10px';
+    updateCheckBtn.onclick = function() {
+        showNotification('Mengecek update...', 'info');
+        checkVersionAndUpdate();
+    };
+    
+    // Tambahkan ke version badge
+    const versionBadge = document.querySelector('.version-badge');
+    if (versionBadge) {
+        versionBadge.appendChild(updateCheckBtn);
+    }
+}
+
+// ===== EXPORT FUNCTIONS FOR GLOBAL ACCESS =====
+// Export fungsi yang diperlukan untuk akses global
+window.checkVersionAndUpdate = checkVersionAndUpdate;
+window.performUpdate = performUpdate;
+window.initializeApp = initializeApp;
+
+// ===== START APPLICATION =====
+// Tunggu DOM siap
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', function() {
+        console.log('📄 DOM fully loaded');
+        initializeUpdateSystem();
+        setupErrorHandling();
+        setupPerformanceOptimization();
+        setupEnhancedFeatures();
+    });
+} else {
+    // DOM sudah siap
+    console.log('📄 DOM already loaded');
+    initializeUpdateSystem();
+    setupErrorHandling();
+    setupPerformanceOptimization();
+    setupEnhancedFeatures();
+}
+
+// ===== FALLBACK LOADING =====
+// Jika loading terlalu lama, tampilkan fallback
+setTimeout(() => {
+    const loadingScreen = document.getElementById('loadingScreen');
+    if (loadingScreen && loadingScreen.style.display !== 'none') {
+        console.log('⚠️ Loading taking too long, showing fallback');
+        loadingScreen.innerHTML = `
+            <div style="color: var(--warning)">⚠️</div>
+            <h2>Loading...</h2>
+            <p>Mengalami keterlambatan loading</p>
+            <button onclick="initializeApp()" class="btn btn-primary mt-20">Lanjutkan</button>
+        `;
+    }
+}, 10000); // 10 detik timeout
+
+console.log('🎮 Tic Tac Toe Update System Loaded');
