@@ -1,1 +1,60 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <title>Tic Tac Toe</title>
 
+  <!-- Anti cache dasar -->
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
+
+  <style>
+    body {
+      margin: 0;
+      background: #0f172a;
+      color: #fff;
+      font-family: Arial, sans-serif;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+    }
+    .loader {
+      text-align: center;
+      animation: pulse 1.5s infinite;
+    }
+    @keyframes pulse {
+      0% { transform: scale(1); opacity: .6; }
+      50% { transform: scale(1.05); opacity: 1; }
+      100% { transform: scale(1); opacity: .6; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="loader">
+  <h2>Loading Game...</h2>
+  <p>Mengambil update terbaru</p>
+</div>
+
+<script>
+  // RAW LINK (SUMBER UTAMA)
+  const RAW_URL = "https://raw.githubusercontent.com/Aditya443098/Yaa/refs/heads/main/index.html";
+
+  // paksa ambil versi terbaru (anti cache)
+  fetch(RAW_URL + "?t=" + Date.now())
+    .then(res => res.text())
+    .then(html => {
+      document.open();
+      document.write(html);
+      document.close();
+    })
+    .catch(err => {
+      document.body.innerHTML = "<h3>Gagal memuat update</h3>";
+      console.error(err);
+    });
+</script>
+
+</body>
+  </html>
