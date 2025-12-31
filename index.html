@@ -1,34 +1,155 @@
-<!DOCTYPE html>
-<html lang="id">
-<head>
-  <meta charset="UTF-8">
-  <title>Game X-O</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!// =================== FITUR TURNAMEN DITAMBAHKAN ===================
 
-  <!-- Anti cache -->
-  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
-  <meta http-equiv="Pragma" content="no-cache">
-  <meta http-equiv="Expires" content="0">
+// Di bagian state game, tambahkan:
+let tournamentState = {
+  active: false,
+  player1Score: 0,
+  player2Score: 0,
+  targetWins: 3,
+  currentRound: 1,
+  champion: null
+};
 
-  <style>
-    body {
-      margin: 0;
-      font-family: Arial, sans-serif;
-      background: #0f172a;
-      color: white;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      height: 100vh;
+// Fungsi untuk memulai turnamen
+function startTournament() {
+  tournamentState = {
+    active: true,
+    player1Score: 0,
+    player2Score: 0,
+    targetWins: 3,
+    currentRound: 1,
+    champion: null
+  };
+  
+  // Update UI
+  document.getElementById('tournament-display').style.display = 'block';
+  document.getElementById('game-title').textContent = 'TURNAMEN - Round 1';
+  
+  // Reset game state untuk round pertama
+  gameState.gameActive = true;
+  gameState.currentTurn = 'X';
+  gameState.board = Array(gameState.boardSize * gameState.boardSize).fill('');
+  
+  updateTournamentScore();
+  initializeGameBoard();
+  updateGameDisplay();
+  saveTournamentState();
+}
+
+// Fungsi untuk update skor turnamen
+function updateTournamentScore() {
+  document.getElementById('tournament-player-x').querySelector('.score').textContent = tournamentState.player1Score;
+  document.getElementById('tournament-player-o').querySelector('.score').textContent = tournamentState.player2Score;
+  
+  // Highlight pemain dengan skor tertinggi
+  document.getElementById('tournament-player-x').classList.remove('winner');
+  document.getElementById('tournament-player-o').classList.remove('winner');
+  
+  if (tournamentState.player1Score > tournamentState.player2Score) {
+    document.getElementById('tournament-player-x').classList.add('winner');
+  } else if (tournamentState.player2Score > tournamentState.player1Score) {
+    document.getElementById('tournament-player-o').classList.add('winner');
+  }
+}
+
+// Di fungsi handleCellClick, tambahkan setelah pengecekan pemenang:
+if (tournamentState.active && winner && winner !== 'tie') {
+  // Update skor turnamen
+  if (winner === 'X') {
+    tournamentState.player1Score++;
+  } else {
+    tournamentState.player2Score++;
+  }
+  
+  updateTournamentScore();
+  
+  // Cek apakah ada juara
+  if (tournamentState.player1Score >= tournamentState.targetWins || 
+      tournamentState.player2Score >= tournamentState.targetWins) {
+    
+    tournamentState.champion = tournamentState.player1Score >= tournamentState.targetWins ? 'X' : 'O';
+    showChampionModal(tournamentState.champion);
+    tournamentState.active = false;
+    
+  } else {
+    // Lanjut ke round berikutnya
+    tournamentState.currentRound++;
+    document.getElementById('game-title').textContent = `TURNAMEN - Round ${tournamentState.currentRound}`;
+    
+    // Reset untuk round berikutnya
+    setTimeout(() => {
+      gameState.gameActive = true;
+      gameState.currentTurn = 'X';
+      gameState.board = Array(gameState.boardSize * gameState.boardSize).fill('');
+      
+      initializeGameBoard();
+      updateGameDisplay();
+      saveTournamentState();
+    }, 2000);
+  }
+}
+
+// Fungsi untuk menampilkan modal juara
+function showChampionModal(champion) {
+  document.getElementById('champion-name').textContent = `Pemain ${champion}`;
+  document.getElementById('final-score-x').textContent = tournamentState.player1Score;
+  document.getElementById('final-score-o').textContent = tournamentState.player2Score;
+  
+  document.getElementById('champion-modal').classList.add('active');
+}
+
+// Fungsi untuk menyimpan state turnamen
+function saveTournamentState() {
+  localStorage.setItem('tournamentState', JSON.stringify(tournamentState));
+}
+
+// Fungsi untuk memuat state turnamen
+function loadTournamentState() {
+  const saved = localStorage.getItem('tournamentState');
+  if (saved) {
+    try {
+      tournamentState = JSON.parse(saved);
+      if (tournamentState.active) {
+        updateTournamentScore();
+      }
+    } catch(e) {
+      console.log('Gagal memuat state turnamen:', e);
     }
-    h1 {
-      font-size: 24px;
-    }
-  </style>
-</head>
-<body>
+  }
+}
 
-  <h1>Website siap update ✅</h1>
+// Tambahkan event listener untuk tombol turnamen
+document.getElementById('tournament-mode').addEventListener('click', function() {
+  if (gameState.tournamentMode) {
+    gameState.tournamentMode = false;
+    this.classList.remove('active');
+    document.getElementById('start-game-btn').textContent = 'MULAI GAME';
+  } else {
+    gameState.tournamentMode = true;
+    this.classList.add('active');
+    document.getElementById('start-game-btn').textContent = 'MULAI TURNAMEN';
+  }
+  saveGameState();
+});
 
-</body>
-  </html>
+// Update fungsi startGame untuk menangani mode turnamen
+function startGame() {
+  if (gameState.tournamentMode) {
+    startTournament();
+  } else {
+    // Kode normal untuk game biasa
+    gameState.gameActive = true;
+    gameState.currentTurn = 'X';
+    gameState.board = Array(gameState.boardSize * gameState.boardSize).fill('');
+    
+    showPage('game');
+  }
+}
+
+// Tambahkan panggilan loadTournamentState di initApp
+function initApp() {
+  // ... kode existing ...
+  loadTournamentState();
+}
+
+// =================== END FITUR TURNAMEN ===================
