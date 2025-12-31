@@ -1,79 +1,85 @@
-// Update state turnamen
-let tournamentState = {
-    active: false,
-    player1Score: 0,
-    player2Score: 0,
-    targetWins: 4, // GANTI 3 MENJADI 4
-    currentRound: 1,
-    champion: null
-};
+// =============== SISTEM TURNAMEN ===============
+let tournamentActive = false;
+let tournamentWins = { X: 0, O: 0 };
+const TARGET_WINS = 4; // Ubah angka ini untuk jumlah kemenangan
 
-// Update fungsi cek juara
-function checkTournamentWinner() {
-    if (tournamentState.player1Score >= tournamentState.targetWins) {
-        tournamentState.champion = 'X';
-        return 'X';
-    } else if (tournamentState.player2Score >= tournamentState.targetWins) {
-        tournamentState.champion = 'O';
-        return 'O';
-    }
-    return null;
-}
-
-// Update fungsi startTournament
 function startTournament() {
-    tournamentState = {
-        active: true,
-        player1Score: 0,
-        player2Score: 0,
-        targetWins: 4, // GANTI DI SINI JUGA
-        currentRound: 1,
-        champion: null
-    };
-    
-    // Update UI
-    document.getElementById('tournament-display').style.display = 'block';
-    document.getElementById('game-title').textContent = 'TURNAMEN - Round 1 (4 Wins)';
-    
-    // Reset game
-    gameState.gameActive = true;
-    gameState.currentTurn = 'X';
-    gameState.board = Array(gameState.boardSize * gameState.boardSize).fill('');
-    
-    updateTournamentScore();
-    initializeGameBoard();
-    updateGameDisplay();
-    saveTournamentState();
+    tournamentActive = true;
+    tournamentWins = { X: 0, O: 0 };
+    document.getElementById('tournament-info').style.display = 'block';
+    updateTournamentDisplay();
+    alert(`Turnamen dimulai! Menangkan ${TARGET_WINS} kali untuk jadi juara!`);
 }
 
-// Update fungsi handleCellClick bagian turnamen
-if (tournamentState.active && winner && winner !== 'tie') {
-    if (winner === 'X') {
-        tournamentState.player1Score++;
-    } else {
-        tournamentState.player2Score++;
-    }
-    
-    updateTournamentScore();
-    
-    // Cek apakah ada juara (4 kemenangan)
-    if (tournamentState.player1Score >= tournamentState.targetWins || 
-        tournamentState.player2Score >= tournamentState.targetWins) {
+function updateTournamentDisplay() {
+    if (tournamentActive) {
+        document.getElementById('tournament-x-wins').textContent = tournamentWins.X;
+        document.getElementById('tournament-o-wins').textContent = tournamentWins.O;
         
-        tournamentState.champion = tournamentState.player1Score >= tournamentState.targetWins ? 'X' : 'O';
-        showChampionModal(tournamentState.champion);
-        tournamentState.active = false;
-        
-    } else {
-        // Lanjut ke round berikutnya
-        tournamentState.currentRound++;
-        document.getElementById('game-title').textContent = `TURNAMEN - Round ${tournamentState.currentRound}`;
-        
-        setTimeout(() => {
-            restartGame();
-        }, 2000);
+        // Cek jika ada juara
+        if (tournamentWins.X >= TARGET_WINS) {
+            endTournament('X');
+        } else if (tournamentWins.O >= TARGET_WINS) {
+            endTournament('O');
+        }
     }
 }
 
-// Update teks UI
-document.querySelector('.tournament-card p').textContent = 'Menangkan 4 kali untuk menjadi juara!';
+function endTournament(winner) {
+    tournamentActive = false;
+    document.getElementById('tournament-info').style.display = 'none';
+    
+    // Berikan hadiah
+    const prize = TARGET_WINS * 1000;
+    gameState.coins += prize;
+    
+    // Tampilkan modal kemenangan
+    const modal = document.createElement('div');
+    modal.style.cssText = `
+        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+        background: rgba(0,0,0,0.8); z-index: 10000;
+        display: flex; justify-content: center; align-items: center;
+    `;
+    
+    modal.innerHTML = `
+        <div style="background: linear-gradient(135deg, #2d3436, #1a1a2e);
+            padding: 30px; border-radius: 20px; text-align: center;
+            border: 3px solid gold; max-width: 400px; width: 90%;">
+            <h2 style="color: gold;">🏆 JUARA TURNAMEN! 🏆</h2>
+            <p style="font-size: 24px; margin: 20px 0;">Pemain ${winner}</p>
+            <p>Menang ${TARGET_WINS} kali pertama!</p>
+            <p style="color: gold; font-size: 18px;">Hadiah: ${prize} koin!</p>
+            <button onclick="this.parentElement.parentElement.remove(); showPage('menu');"
+                style="background: gold; color: black; border: none; padding: 10px 20px;
+                border-radius: 10px; margin-top: 20px; cursor: pointer;">
+                OK
+            </button>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+    
+    // Reset tournament
+    tournamentWins = { X: 0, O: 0 };
+    saveGameState();
+}
+// =============== END TURNAMEN ===============
+
+// Update fungsi handleCellClick:
+if (winner && winner !== 'tie') {
+    // ... kode existing ...
+    
+    // Update skor turnamen jika aktif
+    if (tournamentActive) {
+        tournamentWins[winner]++;
+        updateTournamentDisplay();
+    }
+}
+
+// Update tombol turnamen di menu:
+document.getElementById('start-tournament-btn').addEventListener('click', function() {
+    if (confirm(`Mulai turnamen? Menangkan ${TARGET_WINS} kali untuk jadi juara!`)) {
+        startTournament();
+        showPage('game');
+    }
+});
