@@ -1,128 +1,106 @@
-// ========== UPDATE VERSI ==========
-const APP_VERSION = "2.0"; // Update versi
-// ==================================
 
-// ========== STATE TURNAMEN BARU ==========
-let tournamentActive = false;
-let tournamentScores = { X: 0, O: 0 };
-const WIN_TARGET = 4; // Sistem 4 kemenangan
+// Initialize tournaments
+function initTournaments() {
+    const tournaments = [
+        { id: 1, name: 'Turnamen Harian', status: 'ongoing', players: 65, prize: 500 },
+        { id: 2, name: 'Turnamen Mingguan', status: 'upcoming', players: 0, prize: 2000 },
+        { id: 3, name: 'Turnamen Bulanan', status: 'upcoming', players: 0, prize: 10000 }
+    ];
 
-function startTournament() {
-    tournamentActive = true;
-    tournamentScores = { X: 0, O: 0 };
-    
-    // Tampilkan info turnamen
-    document.getElementById('tournament-display').style.display = 'block';
-    document.getElementById('game-title').textContent = 'TURNAMEN - 4 Wins';
-    
-    // Reset game
-    gameState.gameActive = true;
-    gameState.currentTurn = 'X';
-    gameState.board = Array(gameState.boardSize * gameState.boardSize).fill('');
-    
-    initializeGameBoard();
-    updateGameDisplay();
-    updateTournamentScore();
-    
-    alert('🏆 TURNAMEN DIMULAI! 🏆\nMenangkan 4 kali untuk jadi juara!');
-}
+    const container = document.getElementById('tournament-list');
+    container.innerHTML = '';
 
-function updateTournamentScore() {
-    if (tournamentActive) {
-        document.getElementById('tournament-score-x').textContent = tournamentScores.X;
-        document.getElementById('tournament-score-o').textContent = tournamentScores.O;
-    }
-}
-
-function checkTournamentWinner() {
-    if (tournamentScores.X >= WIN_TARGET) {
-        return 'X';
-    } else if (tournamentScores.O >= WIN_TARGET) {
-        return 'O';
-    }
-    return null;
-}
-
-function endTournament(winner) {
-    tournamentActive = false;
-    
-    // Beri hadiah
-    const prize = 4000;
-    gameState.coins += prize;
-    
-    // Tampilkan modal
-    document.getElementById('champion-name').textContent = `Pemain ${winner}`;
-    document.getElementById('final-score-x').textContent = tournamentScores.X;
-    document.getElementById('final-score-o').textContent = tournamentScores.O;
-    document.getElementById('champion-modal').classList.add('active');
-    
-    alert(`🎉 JUARA TURNAMEN! 🎉\nPemain ${winner} menang ${WIN_TARGET} kali!\nHadiah: ${prize} koin!`);
-}
-
-// ========== UPDATE FUNGSI handleCellClick ==========
-function handleCellClick(index) {
-    // Kode existing...
-    
-    // Cek pemenang
-    const winner = checkWinner();
-    
-    if (winner) {
-        gameState.gameActive = false;
+    tournaments.forEach(tournament => {
+        const joined = userData.tournamentProgress?.[tournament.id];
         
-        if (winner === 'tie') {
-            // Kode existing...
-        } else {
-            // Kode existing...
-            
-            // ====== TURNAMEN LOGIC ======
-            if (tournamentActive && winner !== 'tie') {
-                tournamentScores[winner]++;
-                updateTournamentScore();
-                
-                // Cek juara turnamen
-                const tournamentWinner = checkTournamentWinner();
-                if (tournamentWinner) {
-                    endTournament(tournamentWinner);
-                    return;
-                } else {
-                    // Lanjut game berikutnya
-                    setTimeout(() => {
-                        gameState.gameActive = true;
-                        gameState.currentTurn = 'X';
-                        gameState.board = Array(gameState.boardSize * gameState.boardSize).fill('');
-                        initializeGameBoard();
-                        updateGameDisplay();
-                    }, 1500);
-                }
+        const card = document.createElement('div');
+        card.className = 'tournament-card';
+        card.innerHTML = `
+            <div class="tournament-header">
+                <div class="tournament-title">${tournament.name}</div>
+                <div class="tournament-status status-${tournament.status}">
+                    ${tournament.status === 'ongoing' ? 'Berlangsung' : 'Akan Datang'}
+                </div>
+            </div>
+            <div class="tournament-desc">
+                <p>Hadiah: <strong>${tournament.prize} Coin</strong></p>
+                <p>Peserta: ${tournament.players}/100</p>
+                ${joined ? '<p class="joined-badge">✓ Anda sudah bergabung</p>' : ''}
+            </div>
+            ${tournament.status === 'ongoing' ? `
+                <div class="tournament-progress">
+                    <div class="progress-bar">
+                        <div class="progress-fill" style="width: ${tournament.players}%"></div>
+                    </div>
+                </div>
+                <button class="btn ${joined ? 'btn-secondary' : 'btn-primary'} join-tournament-btn" 
+                        data-id="${tournament.id}">
+                    ${joined ? 'Lanjutkan' : 'Gabung'}
+                </button>
+            ` : '<button class="btn btn-secondary" disabled>Segera Hadir</button>'}
+        `;
+        
+        container.appendChild(card);
+    });
+
+    // Event listeners for join buttons
+    document.querySelectorAll('.join-tournament-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const tournamentId = this.dataset.id;
+            if (this.textContent === 'Gabung') {
+                joinTournament(tournamentId);
+            } else {
+                continueTournament(tournamentId);
             }
-            // ============================
+        });
+    });
+}
+
+// Join tournament
+function joinTournament(tournamentId) {
+    if (!userData.tournamentProgress) userData.tournamentProgress = {};
+    
+    userData.tournamentProgress[tournamentId] = {
+        joined: true,
+        wins: 0,
+        losses: 0,
+        round: 1
+    };
+    
+    saveUserData();
+    initTournaments();
+    alert('Bergabung turnamen berhasil!');
+}
+
+// Continue tournament
+function continueTournament(tournamentId) {
+    alert('Memulai pertandingan turnamen...');
+    // Set game mode to tournament
+    gameState.gameMode = 'tournament';
+    gameState.difficulty = 'hard';
+    startGame();
+}
+
+// Save tournament progress after game
+function updateTournamentResult(win) {
+    const tournamentId = Object.keys(userData.tournamentProgress || {})[0];
+    if (!tournamentId) return;
+    
+    const progress = userData.tournamentProgress[tournamentId];
+    if (win) {
+        progress.wins++;
+        progress.round++;
+        if (progress.wins >= 3) {
+            alert(`Selamat! Anda memenangkan turnamen! +${tournamentId === '1' ? 500 : tournamentId === '2' ? 2000 : 10000} Coin`);
+            delete userData.tournamentProgress[tournamentId];
+        }
+    } else {
+        progress.losses++;
+        if (progress.losses >= 2) {
+            alert('Anda tereliminasi dari turnamen.');
+            delete userData.tournamentProgress[tournamentId];
         }
     }
+    
+    saveUserData();
 }
-// ==========================================
-
-// ========== TAMBAH TOMBOL TURNAMEN ==========
-document.addEventListener('DOMContentLoaded', function() {
-    // Kode existing...
-    
-    // Tambah tombol turnamen
-    const tournamentBtn = document.createElement('button');
-    tournamentBtn.className = 'btn';
-    tournamentBtn.innerHTML = '<i class="fas fa-trophy"></i> START TURNAMEN';
-    tournamentBtn.id = 'tournament-btn';
-    tournamentBtn.style.background = 'linear-gradient(to right, #9b59b6, #e056fd)';
-    tournamentBtn.style.margin = '10px 0';
-    
-    tournamentBtn.addEventListener('click', function() {
-        if (confirm('Mulai turnamen?\nMenangkan 4 game untuk jadi juara!')) {
-            startTournament();
-            showPage('game');
-        }
-    });
-    
-    // Masukkan tombol di menu
-    const menuPage = document.getElementById('menu-page');
-    const startGameBtn = document.getElementById('start-game-btn');
-    menuPage.insertBefore(tournamentBtn, startGameBtn.nextSibling);
-});
-// ===========================================
