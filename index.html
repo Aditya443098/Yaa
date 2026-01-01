@@ -1,1 +1,741 @@
+// UPDATE SYSTEM - GitHub Integration v1.4
+const GITHUB_REPO_URL = "https://github.com/Aditya443098/Yaa";
+const GITHUB_RAW_URL = "https://raw.githubusercontent.com/Aditya443098/Yaa/main/index.html";
+const GITHUB_API_URL = "https://api.github.com/repos/Aditya443098/Yaa/contents/";
+const LATEST_VERSION = "1.4";
 
+let updateCheckInterval = null;
+let updateDownloaded = false;
+let latestUpdateData = null;
+let isCheckingForUpdates = false;
+
+// Initialize update system
+function initUpdateSystem() {
+    console.log("Update System v1.4 initialized");
+    
+    // Check for updates on startup
+    setTimeout(checkGitHubUpdate, 2000);
+    
+    // Setup update checking interval (every 5 minutes)
+    if (localStorage.getItem('auto_update') !== 'false') {
+        updateCheckInterval = setInterval(checkGitHubUpdate, 300000); // 5 minutes
+    }
+    
+    // Setup event listeners for update buttons
+    setupUpdateEventListeners();
+    
+    // Display current version
+    displayCurrentVersion();
+}
+
+function setupUpdateEventListeners() {
+    // Update screen buttons
+    document.getElementById('githubUpdateBtn')?.addEventListener('click', updateFromGitHub);
+    document.getElementById('installUpdateBtn')?.addEventListener('click', installUpdate);
+    document.getElementById('downloadUpdateBtn')?.addEventListener('click', simulateUpdateDownload);
+    
+    // Settings toggle for auto-update
+    const autoUpdateToggle = document.getElementById('autoUpdateToggle');
+    if (autoUpdateToggle) {
+        autoUpdateToggle.addEventListener('change', function() {
+            localStorage.setItem('auto_update', this.checked);
+            
+            if (this.checked) {
+                // Start interval
+                if (updateCheckInterval) clearInterval(updateCheckInterval);
+                updateCheckInterval = setInterval(checkGitHubUpdate, 300000);
+                showNotification('Update Otomatis', 'Sistem akan otomatis memeriksa update setiap 5 menit.', 'success');
+            } else {
+                // Stop interval
+                if (updateCheckInterval) {
+                    clearInterval(updateCheckInterval);
+                    updateCheckInterval = null;
+                }
+                showNotification('Update Otomatis', 'Update otomatis telah dimatikan.', 'info');
+            }
+        });
+    }
+    
+    // Check for updates button
+    const checkUpdateBtn = document.getElementById('checkUpdateBtn');
+    if (checkUpdateBtn) {
+        checkUpdateBtn.addEventListener('click', () => {
+            showNotification('Memeriksa Update', 'Sedang memeriksa update terbaru...', 'info');
+            checkGitHubUpdate();
+        });
+    }
+}
+
+function displayCurrentVersion() {
+    // Update version display throughout the app
+    const versionElements = document.querySelectorAll('#versionBadge, #footerVersion, #currentVersion');
+    const savedVersion = localStorage.getItem('app_version') || APP_VERSION;
+    
+    versionElements.forEach(el => {
+        if (el.id === 'footerVersion') {
+            el.textContent = savedVersion;
+        } else {
+            el.textContent = `v${savedVersion}`;
+        }
+    });
+}
+
+// Main update checking function
+async function checkGitHubUpdate() {
+    if (isCheckingForUpdates) return;
+    
+    try {
+        isCheckingForUpdates = true;
+        const savedVersion = localStorage.getItem('app_version') || APP_VERSION;
+        
+        // Update status display
+        if (document.getElementById('updateStatus')) {
+            document.getElementById('updateStatus').textContent = 'Memeriksa update...';
+        }
+        
+        // Check auto-update settings
+        const autoUpdateEnabled = localStorage.getItem('auto_update') !== 'false';
+        if (!autoUpdateEnabled && !window.location.hash.includes('update')) {
+            console.log('Auto-update is disabled');
+            return;
+        }
+        
+        // Check WiFi only setting
+        const wifiOnly = localStorage.getItem('wifi_only') === 'true';
+        if (wifiOnly && !isWifiConnection()) {
+            console.log('WiFi only setting enabled, skipping update check on mobile data');
+            if (document.getElementById('updateStatus')) {
+                document.getElementById('updateStatus').textContent = 'Menunggu koneksi WiFi';
+            }
+            return;
+        }
+        
+        // Fetch latest version info from GitHub
+        console.log('Checking for updates on GitHub...');
+        const latestVersion = await getLatestVersionFromGitHub();
+        
+        if (!latestVersion) {
+            throw new Error('Could not fetch version from GitHub');
+        }
+        
+        console.log(`Current: v${savedVersion}, GitHub: v${latestVersion}`);
+        
+        // Compare versions
+        const versionComparison = compareVersions(latestVersion, savedVersion);
+        
+        if (versionComparison > 0) {
+            // New version available
+            console.log(`Update available: v${latestVersion}`);
+            handleUpdateAvailable(latestVersion);
+        } else {
+            // Already up to date
+            console.log('Already on latest version');
+            handleNoUpdateAvailable();
+        }
+        
+    } catch (error) {
+        console.error('Error checking GitHub update:', error);
+        handleUpdateCheckError(error);
+    } finally {
+        isCheckingForUpdates = false;
+    }
+}
+
+// Get latest version from GitHub
+async function getLatestVersionFromGitHub() {
+    try {
+        // Try to fetch the raw HTML file first
+        const response = await fetch(`${GITHUB_RAW_URL}?t=${Date.now()}`, {
+            headers: {
+                'Cache-Control': 'no-cache',
+                'Pragma': 'no-cache'
+            }
+        });
+        
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const htmlContent = await response.text();
+        
+        // Extract version from the HTML content
+        const versionMatch = htmlContent.match(/const APP_VERSION = "([\d.]+)"/);
+        if (versionMatch && versionMatch[1]) {
+            return versionMatch[1];
+        }
+        
+        // Alternative: try to get from GitHub API
+        const apiResponse = await fetch(`${GITHUB_API_URL}index.html`, {
+            headers: {
+                'Accept': 'application/vnd.github.v3+json'
+            }
+        });
+        
+        if (apiResponse.ok) {
+            const data = await apiResponse.json();
+            const content = atob(data.content);
+            const apiVersionMatch = content.match(/const APP_VERSION = "([\d.]+)"/);
+            if (apiVersionMatch && apiVersionMatch[1]) {
+                return apiVersionMatch[1];
+            }
+        }
+        
+        return null;
+    } catch (error) {
+        console.error('Error fetching from GitHub:', error);
+        return null;
+    }
+}
+
+// Handle when update is available
+function handleUpdateAvailable(latestVersion) {
+    // Store update data
+    latestUpdateData = {
+        version: latestVersion,
+        available: true,
+        checkedAt: new Date().toISOString()
+    };
+    
+    localStorage.setItem('latest_update', JSON.stringify(latestUpdateData));
+    
+    // Update UI elements
+    if (document.getElementById('updateStatus')) {
+        document.getElementById('updateStatus').textContent = `Update v${latestVersion} tersedia!`;
+        document.getElementById('updateStatus').classList.add('new');
+    }
+    
+    // Show update sections
+    const updateAvailableSection = document.getElementById('updateAvailableSection');
+    const noUpdateSection = document.getElementById('noUpdateSection');
+    const githubUpdateSection = document.getElementById('githubUpdateSection');
+    
+    if (updateAvailableSection) updateAvailableSection.style.display = 'none';
+    if (noUpdateSection) noUpdateSection.style.display = 'none';
+    if (githubUpdateSection) githubUpdateSection.style.display = 'block';
+    
+    // Update version info in GitHub update section
+    const githubVersionElement = document.getElementById('githubVersion');
+    if (githubVersionElement) {
+        githubVersionElement.textContent = `v${latestVersion}`;
+    }
+    
+    // Show notification if permission granted
+    const lastNotifiedVersion = localStorage.getItem('last_notified_version');
+    const notificationPermission = localStorage.getItem('notifications_enabled') === 'true';
+    
+    if (notificationPermission && (!lastNotifiedVersion || lastNotifiedVersion !== latestVersion)) {
+        showUpdateNotification(latestVersion);
+        localStorage.setItem('last_notified_version', latestVersion);
+    }
+    
+    // Update changelog with new features
+    updateChangelogForVersion(latestVersion);
+}
+
+// Handle when no update is available
+function handleNoUpdateAvailable() {
+    // Update UI elements
+    if (document.getElementById('updateStatus')) {
+        document.getElementById('updateStatus').textContent = 'Anda menggunakan versi terbaru';
+        document.getElementById('updateStatus').classList.remove('new');
+    }
+    
+    // Show no update section
+    const updateAvailableSection = document.getElementById('updateAvailableSection');
+    const noUpdateSection = document.getElementById('noUpdateSection');
+    const githubUpdateSection = document.getElementById('githubUpdateSection');
+    
+    if (updateAvailableSection) updateAvailableSection.style.display = 'none';
+    if (noUpdateSection) noUpdateSection.style.display = 'block';
+    if (githubUpdateSection) githubUpdateSection.style.display = 'none';
+    
+    // Clear update data
+    localStorage.removeItem('latest_update');
+}
+
+// Handle update check error
+function handleUpdateCheckError(error) {
+    console.error('Update check failed:', error);
+    
+    if (document.getElementById('updateStatus')) {
+        document.getElementById('updateStatus').textContent = 'Gagal memeriksa update';
+        document.getElementById('updateStatus').classList.remove('new');
+    }
+    
+    // Show fallback to local update check
+    setTimeout(checkLocalUpdate, 1000);
+}
+
+// Local update check fallback
+function checkLocalUpdate() {
+    const savedVersion = localStorage.getItem('app_version') || APP_VERSION;
+    const currentVersion = APP_VERSION;
+    
+    if (savedVersion !== currentVersion) {
+        if (document.getElementById('updateStatus')) {
+            document.getElementById('updateStatus').textContent = 'Update tersedia';
+            document.getElementById('updateStatus').classList.add('new');
+        }
+        
+        const updateAvailableSection = document.getElementById('updateAvailableSection');
+        const noUpdateSection = document.getElementById('noUpdateSection');
+        
+        if (updateAvailableSection) updateAvailableSection.style.display = 'block';
+        if (noUpdateSection) noUpdateSection.style.display = 'none';
+    }
+}
+
+// Update from GitHub function
+async function updateFromGitHub() {
+    try {
+        if (!latestUpdateData || !latestUpdateData.available) {
+            showNotification('Update Tidak Tersedia', 'Tidak ada update yang tersedia untuk diunduh.', 'warning');
+            return;
+        }
+        
+        // Disable button and show loading state
+        const updateBtn = document.getElementById('githubUpdateBtn');
+        if (updateBtn) {
+            updateBtn.disabled = true;
+            updateBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Mengunduh...';
+        }
+        
+        // Show progress bar
+        const progressFill = document.getElementById('progressFill');
+        const progressPercent = document.getElementById('progressPercent');
+        
+        if (progressFill) progressFill.style.width = '0%';
+        if (progressPercent) progressPercent.textContent = '0%';
+        
+        // Simulate download progress
+        let progress = 0;
+        const totalSteps = 100;
+        const stepTime = 50; // ms
+        
+        const downloadInterval = setInterval(() => {
+            progress += Math.random() * 5 + 3; // Random progress between 3-8%
+            
+            if (progress >= 100) {
+                progress = 100;
+                clearInterval(downloadInterval);
+                
+                // Download complete
+                if (updateBtn) {
+                    updateBtn.style.display = 'none';
+                }
+                
+                // Show install button
+                const installBtn = document.getElementById('installUpdateBtn');
+                if (installBtn) {
+                    installBtn.style.display = 'inline-block';
+                }
+                
+                // Update progress to 100%
+                if (progressFill) progressFill.style.width = '100%';
+                if (progressPercent) progressPercent.textContent = '100%';
+                
+                // Mark update as downloaded
+                updateDownloaded = true;
+                localStorage.setItem('update_downloaded', 'true');
+                
+                // Show success message
+                showNotification('Download Selesai', 'Update berhasil diunduh. Klik Install untuk menerapkan.', 'success');
+                
+                // Fetch and store update content for installation
+                fetchUpdateContent();
+            } else {
+                // Update progress bar
+                if (progressFill) progressFill.style.width = `${progress}%`;
+                if (progressPercent) progressPercent.textContent = `${Math.round(progress)}%`;
+                
+                // Update button text
+                if (updateBtn) {
+                    const remaining = Math.round((100 - progress) * 0.032); // Simulated MB remaining
+                    updateBtn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> Mengunduh... (${remaining} MB tersisa)`;
+                }
+            }
+        }, stepTime);
+        
+    } catch (error) {
+        console.error('Error during update:', error);
+        showNotification('Update Gagal', 'Terjadi kesalahan saat mengunduh update.', 'danger');
+        
+        // Reset button state
+        const updateBtn = document.getElementById('githubUpdateBtn');
+        if (updateBtn) {
+            updateBtn.disabled = false;
+            updateBtn.textContent = 'Update dari GitHub';
+        }
+    }
+}
+
+// Fetch update content from GitHub
+async function fetchUpdateContent() {
+    try {
+        console.log('Fetching update content from GitHub...');
+        
+        const response = await fetch(`${GITHUB_RAW_URL}?t=${Date.now()}`, {
+            headers: {
+                'Cache-Control': 'no-cache',
+                'Pragma': 'no-cache'
+            }
+        });
+        
+        if (!response.ok) {
+            throw new Error(`Failed to fetch update: ${response.status}`);
+        }
+        
+        const updateContent = await response.text();
+        
+        // Store update content for installation
+        localStorage.setItem('update_content', updateContent);
+        localStorage.setItem('update_content_version', latestUpdateData.version);
+        
+        console.log('Update content stored successfully');
+        
+    } catch (error) {
+        console.error('Error fetching update content:', error);
+    }
+}
+
+// Install the downloaded update
+function installUpdate() {
+    if (!updateDownloaded) {
+        showNotification('Update Belum Diunduh', 'Silakan unduh update terlebih dahulu.', 'warning');
+        return;
+    }
+    
+    // Show confirmation dialog
+    if (!confirm(`Update ke versi ${latestUpdateData.version}? Semua data akan disimpan dan game akan direstart.`)) {
+        return;
+    }
+    
+    try {
+        // Save user data before update
+        saveUserGameState();
+        
+        // Create backup of current state
+        const backupData = {
+            user: currentUser,
+            gameState: gameState,
+            timestamp: new Date().toISOString(),
+            version: APP_VERSION
+        };
+        
+        localStorage.setItem(`backup_v${APP_VERSION}`, JSON.stringify(backupData));
+        
+        // Update app version in localStorage
+        localStorage.setItem('app_version', latestUpdateData.version);
+        
+        // Clear update flags
+        localStorage.removeItem('update_downloaded');
+        localStorage.removeItem('latest_update');
+        
+        // Show success message
+        showNotification('Update Berhasil!', `Game telah diupdate ke v${latestUpdateData.version}. Halaman akan direload.`, 'success');
+        
+        // Reload page after delay
+        setTimeout(() => {
+            // Clear cache and reload
+            if (caches && caches.keys) {
+                caches.keys().then(cacheNames => {
+                    cacheNames.forEach(cacheName => {
+                        caches.delete(cacheName);
+                    });
+                });
+            }
+            
+            // Force reload
+            window.location.reload(true);
+        }, 2000);
+        
+    } catch (error) {
+        console.error('Error installing update:', error);
+        showNotification('Install Gagal', 'Terjadi kesalahan saat menginstall update.', 'danger');
+    }
+}
+
+// Simulated update download (for demo purposes)
+function simulateUpdateDownload() {
+    // Disable button
+    const downloadBtn = document.getElementById('downloadUpdateBtn');
+    if (downloadBtn) {
+        downloadBtn.disabled = true;
+        downloadBtn.textContent = 'Mengunduh...';
+    }
+    
+    // Show progress
+    const progressFill = document.getElementById('progressFill');
+    const progressPercent = document.getElementById('progressPercent');
+    
+    let progress = 0;
+    const interval = setInterval(() => {
+        progress += Math.random() * 10 + 5; // Random increment 5-15%
+        
+        if (progress >= 100) {
+            progress = 100;
+            clearInterval(interval);
+            
+            // Update complete
+            if (downloadBtn) {
+                downloadBtn.textContent = 'Update Berhasil!';
+            }
+            
+            // Save new version
+            localStorage.setItem('app_version', APP_VERSION);
+            updateDownloaded = true;
+            
+            // Update UI
+            const savedVersionElement = document.getElementById('savedVersion');
+            const updateStatus = document.getElementById('updateStatus');
+            
+            if (savedVersionElement) savedVersionElement.textContent = `v${APP_VERSION}`;
+            if (updateStatus) {
+                updateStatus.textContent = 'Versi terbaru sudah diinstall';
+                updateStatus.classList.remove('new');
+            }
+            
+            // Show success
+            showNotification('Update Berhasil!', 'Aplikasi akan direload untuk menerapkan perubahan.', 'success');
+            
+            // Reload page
+            setTimeout(() => {
+                window.location.reload();
+            }, 2000);
+        }
+        
+        // Update progress
+        if (progressFill) progressFill.style.width = `${progress}%`;
+        if (progressPercent) progressPercent.textContent = `${Math.round(progress)}%`;
+        
+        // Update button text
+        if (downloadBtn) {
+            const remaining = ((100 - progress) / 100 * 3.2).toFixed(1);
+            downloadBtn.textContent = `Mengunduh... (${remaining} MB tersisa)`;
+        }
+    }, 200);
+}
+
+// Show update notification
+function showUpdateNotification(version) {
+    const notificationPermission = localStorage.getItem('notifications_enabled') === 'true';
+    
+    if (notificationPermission && 'Notification' in window && Notification.permission === 'granted') {
+        // Use browser notifications
+        const notification = new Notification('Update Game Tersedia!', {
+            body: `Versi ${version} siap diunduh. Buka menu Update untuk download.`,
+            icon: 'https://cdn-icons-png.flaticon.com/512/3067/3067256.png',
+            tag: 'game-update'
+        });
+        
+        notification.onclick = () => {
+            window.focus();
+            if (window.location.hash !== '#update') {
+                switchScreen('updateScreen');
+            }
+            notification.close();
+        };
+    } else {
+        // Use custom notification
+        showNotification('Update Tersedia!', `Versi ${version} siap diunduh. Buka menu Update untuk download.`, 'info');
+    }
+}
+
+// Update changelog for specific version
+function updateChangelogForVersion(version) {
+    const changelogItems = {
+        "1.4": [
+            "Sistem turnamen mingguan dengan hadiah koin",
+            "50+ pencapaian dan badge untuk dikumpulkan",
+            "Mode permainan 5x5 untuk tantangan ekstra",
+            "Sistem teman dan fitur tantangan",
+            "Skin karakter kustom yang dapat dibeli di shop",
+            "Leaderboard global untuk melihat peringkat",
+            "Efek suara dan musik latar yang immersive",
+            "Mode cerita dengan 10 level berbeda",
+            "Sistem daily reward untuk login harian",
+            "Multi-language support (Indonesia, Inggris)"
+        ],
+        "1.3": [
+            "Perbaikan bug tombol Mulai Game",
+            "Bot selalu muncul di semua mode",
+            "UI lebih modern dengan animasi",
+            "Penambahan Shop & Turnamen (beta)"
+        ],
+        "1.2": [
+            "Sistem update otomatis dengan notifikasi",
+            "Game 4x4 dan mode bot Hard",
+            "Penyimpanan data aman saat update"
+        ],
+        "1.1": [
+            "Login sistem dan penyimpanan statistik",
+            "Sistem koin dan level pengguna",
+            "Mode bot: Mudah dan Normal"
+        ]
+    };
+    
+    // Update changelog display if on update screen
+    if (document.getElementById('githubUpdateSection')) {
+        const featuresList = document.querySelector('#githubUpdateSection ul');
+        if (featuresList && changelogItems[version]) {
+            featuresList.innerHTML = '';
+            changelogItems[version].forEach(feature => {
+                const li = document.createElement('li');
+                li.textContent = `✅ ${feature}`;
+                li.style.marginBottom = '8px';
+                featuresList.appendChild(li);
+            });
+        }
+    }
+}
+
+// Utility function to compare versions
+function compareVersions(a, b) {
+    const aParts = a.split('.').map(Number);
+    const bParts = b.split('.').map(Number);
+    
+    for (let i = 0; i < Math.max(aParts.length, bParts.length); i++) {
+        const aVal = aParts[i] || 0;
+        const bVal = bParts[i] || 0;
+        
+        if (aVal > bVal) return 1;
+        if (aVal < bVal) return -1;
+    }
+    
+    return 0;
+}
+
+// Check if connected via WiFi
+function isWifiConnection() {
+    // This is a simplified check - in real apps you'd use more sophisticated methods
+    if (navigator.connection) {
+        const connection = navigator.connection;
+        const type = connection.type || connection.effectiveType;
+        
+        // Consider WiFi, Ethernet, and Wimax as WiFi-like connections
+        return ['wifi', 'ethernet', 'wimax'].includes(type);
+    }
+    
+    // Fallback: assume WiFi if we can't determine
+    return true;
+}
+
+// Save user game state before update
+function saveUserGameState() {
+    if (!currentUser) return;
+    
+    const userStateKey = `user_${currentUser.username}_gamestate`;
+    const stateToSave = {
+        scores: gameState.scores,
+        totalGames: gameState.totalGames,
+        wins: gameState.wins,
+        losses: gameState.losses,
+        draws: gameState.draws,
+        coins: gameState.coins,
+        achievements: gameState.achievements || [],
+        lastSaved: new Date().toISOString()
+    };
+    
+    localStorage.setItem(userStateKey, JSON.stringify(stateToSave));
+    console.log('Game state saved before update');
+}
+
+// Check for and apply pending updates on startup
+function applyPendingUpdates() {
+    const updateContent = localStorage.getItem('update_content');
+    const updateVersion = localStorage.getItem('update_content_version');
+    
+    if (updateContent && updateVersion) {
+        console.log(`Pending update found: v${updateVersion}`);
+        
+        // Check if we should apply it
+        const currentVersion = localStorage.getItem('app_version') || APP_VERSION;
+        
+        if (compareVersions(updateVersion, currentVersion) > 0) {
+            if (confirm(`Update v${updateVersion} ditemukan. Ingin menginstall sekarang?`)) {
+                installPendingUpdate(updateContent, updateVersion);
+            }
+        } else {
+            // Clear old update
+            localStorage.removeItem('update_content');
+            localStorage.removeItem('update_content_version');
+        }
+    }
+}
+
+// Install pending update
+function installPendingUpdate(updateContent, version) {
+    try {
+        // Parse the update HTML
+        const parser = new DOMParser();
+        const updateDoc = parser.parseFromString(updateContent, 'text/html');
+        
+        // Extract scripts and styles from the update
+        const updateScripts = updateDoc.querySelectorAll('script');
+        const updateStyles = updateDoc.querySelectorAll('style, link[rel="stylesheet"]');
+        
+        console.log(`Installing update v${version}...`);
+        
+        // Apply styles first
+        updateStyles.forEach(style => {
+            if (style.tagName === 'STYLE') {
+                const newStyle = document.createElement('style');
+                newStyle.textContent = style.textContent;
+                document.head.appendChild(newStyle);
+            }
+        });
+        
+        // Apply scripts (be careful with this!)
+        updateScripts.forEach(script => {
+            if (script.src) {
+                // External script
+                const newScript = document.createElement('script');
+                newScript.src = script.src;
+                newScript.async = false;
+                document.head.appendChild(newScript);
+            } else if (script.textContent.trim()) {
+                // Inline script
+                try {
+                    eval(script.textContent);
+                } catch (e) {
+                    console.error('Error executing update script:', e);
+                }
+            }
+        });
+        
+        // Update version in localStorage
+        localStorage.setItem('app_version', version);
+        
+        // Clear update data
+        localStorage.removeItem('update_content');
+        localStorage.removeItem('update_content_version');
+        
+        showNotification('Update Diinstall', `Berhasil menginstall update v${version}`, 'success');
+        
+        // Reload to apply changes
+        setTimeout(() => location.reload(), 1000);
+        
+    } catch (error) {
+        console.error('Error installing pending update:', error);
+        showNotification('Update Gagal', 'Terjadi kesalahan saat menginstall update.', 'danger');
+    }
+}
+
+// Export update functions for global use
+window.updateSystem = {
+    checkForUpdates: checkGitHubUpdate,
+    updateFromGitHub: updateFromGitHub,
+    installUpdate: installUpdate,
+    applyPendingUpdates: applyPendingUpdates,
+    getCurrentVersion: () => localStorage.getItem('app_version') || APP_VERSION,
+    getLatestVersion: () => latestUpdateData?.version || null
+};
+
+// Initialize update system when DOM is loaded
+document.addEventListener('DOMContentLoaded', function() {
+    // Wait a bit for other initializations
+    setTimeout(() => {
+        initUpdateSystem();
+        applyPendingUpdates();
+    }, 1000);
+});
