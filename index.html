@@ -1,1 +1,16 @@
+// ===== UPDATE SYSTEM (JANGAN DIHAPUS) =====
+const APP_VERSION = "1.5";
 
+let FEATURES = JSON.parse(localStorage.getItem("features")) || {
+  tournament: false
+};
+
+const savedVersion = localStorage.getItem("app_version");
+
+if (savedVersion !== APP_VERSION) {
+  FEATURES.tournament = true; // fitur baru aktif
+  localStorage.setItem("features", JSON.stringify(FEATURES));
+  localStorage.setItem("app_version", APP_VERSION);
+  console.log("Update berhasil ke versi", APP_VERSION);
+}
+// ===== END UPDATE SYSTEM =====
